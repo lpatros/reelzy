@@ -1,0 +1,6 @@
+[submodule "reelzy-app"]
+	path = reelzy-app
+	url = git@github.com:lpatros/reelzy-app.git
+[submodule "reelzy-api"]
+	path = reelzy-api
+	url = git@github.com:lpatros/reelzy-api.git
