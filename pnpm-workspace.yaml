@@ -1,0 +1,9 @@
+packages:
+  - reelzy-app
+  - reelzy-api
+
+sharedWorkspaceLockfile: false
+
+allowBuilds:
+  '@scarf/scarf': false
+  esbuild: true
