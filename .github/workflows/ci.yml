@@ -1,0 +1,77 @@
+name: Verificar composição
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  composition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      REELZY_WEB_PORT: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Baixar os commits fixados dos submódulos
+        env:
+          APP_DEPLOY_KEY: ${{ secrets.REELZY_APP_DEPLOY_KEY }}
+          API_DEPLOY_KEY: ${{ secrets.REELZY_API_DEPLOY_KEY }}
+        shell: bash
+        run: |
+          : "${APP_DEPLOY_KEY:?Missing read-only app deploy key}"
+          : "${API_DEPLOY_KEY:?Missing read-only API deploy key}"
+          umask 077
+          ssh_dir=$(mktemp -d)
+          trap 'rm -r -- "$ssh_dir"' EXIT
+          printf '%s\n' "$APP_DEPLOY_KEY" > "$ssh_dir/app"
+          printf '%s\n' "$API_DEPLOY_KEY" > "$ssh_dir/api"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+          for component in app api; do
+            cat >> "$ssh_dir/config" <<CONFIG
+          Host reelzy-${component}-ci
+            HostName github.com
+            User git
+            IdentityFile $ssh_dir/$component
+            IdentitiesOnly yes
+            UserKnownHostsFile $ssh_dir/known_hosts
+            StrictHostKeyChecking yes
+            BatchMode yes
+          CONFIG
+          done
+
+          unset APP_DEPLOY_KEY API_DEPLOY_KEY
+          export GIT_SSH_COMMAND="ssh -F $ssh_dir/config"
+          git -c url.git@reelzy-app-ci:lpatros/reelzy-app.git.insteadOf=git@github.com:lpatros/reelzy-app.git \
+              -c url.git@reelzy-api-ci:lpatros/reelzy-api.git.insteadOf=git@github.com:lpatros/reelzy-api.git \
+              submodule update --init --recursive
+          status=$(git submodule status --recursive)
+          printf '%s\n' "$status"
+          [[ "$(wc -l <<< "$status")" -ge 2 ]]
+          ! grep -qE '^[-+U]' <<< "$status"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v6
+      - name: Verificar o workspace e exportar o contrato
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter reelzy-app typecheck
+          pnpm --filter reelzy-api test
+          pnpm --filter reelzy-api openapi:export
+      - name: Subir e verificar web, API e PostgreSQL
+        run: |
+          docker compose up --build --wait --wait-timeout 120
+          node scripts/check-compose.mjs "$(docker compose port web 80)"
+      - name: Exibir logs em caso de falha
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Encerrar o ambiente de teste
+        if: always()
+        run: docker compose down --volumes
