@@ -1,0 +1,16 @@
+**
+!app.json
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!babel.config.js
+!metro.config.js
+!global.css
+!tailwind.config.js
+!nativewind-env.d.ts
+!public/
+!public/**
+!src/
+!src/**
+**/AGENTS.md
+**/.env*
