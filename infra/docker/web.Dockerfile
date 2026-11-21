@@ -7,7 +7,7 @@ RUN pnpm install --frozen-lockfile
 COPY app.json tsconfig.json babel.config.js metro.config.js global.css tailwind.config.js nativewind-env.d.ts ./
 COPY public ./public
 COPY src ./src
-RUN pnpm build:web
+RUN pnpm build:web && chmod -R a+rX dist
 
 FROM nginx:1.30-alpine
 COPY --from=compose nginx.conf /etc/nginx/conf.d/default.conf

@@ -12,5 +12,5 @@
 !public/**
 !src/
 !src/**
-**/AGENTS.md
+**/*.md
 **/.env*
