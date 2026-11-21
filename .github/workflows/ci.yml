@@ -27,6 +27,7 @@ jobs:
         run: |
           : "${APP_DEPLOY_KEY:?Missing read-only app deploy key}"
           : "${API_DEPLOY_KEY:?Missing read-only API deploy key}"
+          original_umask=$(umask)
           umask 077
           ssh_dir=$(mktemp -d)
           trap 'rm -r -- "$ssh_dir"' EXIT
@@ -47,6 +48,7 @@ jobs:
           done
 
           unset APP_DEPLOY_KEY API_DEPLOY_KEY
+          umask "$original_umask"
           export GIT_SSH_COMMAND="ssh -F $ssh_dir/config"
           git -c url.git@reelzy-app-ci:lpatros/reelzy-app.git.insteadOf=git@github.com:lpatros/reelzy-app.git \
               -c url.git@reelzy-api-ci:lpatros/reelzy-api.git.insteadOf=git@github.com:lpatros/reelzy-api.git \

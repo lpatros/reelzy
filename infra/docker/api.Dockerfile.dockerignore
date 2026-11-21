@@ -7,5 +7,5 @@
 !src/**
 !drizzle/
 !drizzle/**
-**/AGENTS.md
+**/*.md
 **/.env*
