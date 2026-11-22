@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 
-const [address, mode] = process.argv.slice(2);
-assert.ok(address, 'Pass the published Compose address or the HTTPS staging origin.');
-assert.ok(mode === undefined || mode === '--account', 'Unknown smoke test option.');
+const [address, ...options] = process.argv.slice(2);
+assert.ok(address, 'Pass the local Expo address or the HTTPS staging origin.');
+assert.ok(options.every((option) => ['--account', '--dev'].includes(option)), 'Unknown smoke test option.');
 const origin = new URL(address.includes('://') ? address : `http://${address}`);
-const fetchPath = (path, options) => fetch(new URL(path, origin), {
+const fetchPath = (path, options, timeoutMs = 10_000) => fetch(new URL(path, origin), {
   ...options,
-  signal: AbortSignal.timeout(10_000),
+  signal: AbortSignal.timeout(timeoutMs),
 });
 
 const health = await fetchPath('/api/v1/health');
@@ -36,18 +36,18 @@ for (let reload = 0; reload < 2; reload += 1) {
 
 const script = shell.match(/<script[^>]*\ssrc="([^"]+)"/)?.[1];
 assert.ok(script, 'The Expo export must reference a JavaScript asset.');
-const asset = await fetchPath(script);
+const asset = await fetchPath(script, undefined, options.includes('--dev') ? 60_000 : 10_000);
 assert.equal(asset.status, 200);
 assert.match(asset.headers.get('content-type') ?? '', /javascript/);
 await asset.body?.cancel();
 
-for (const route of ['/_expo/missing.js', '/assets/missing.png']) {
+for (const route of options.includes('--dev') ? [] : ['/_expo/missing.js', '/assets/missing.png']) {
   const missingAsset = await fetchPath(route);
   assert.equal(missingAsset.status, 404, route);
   await missingAsset.body?.cancel();
 }
 
-if (mode === '--account') {
+if (options.includes('--account')) {
   const accountPage = await fetchPath('/account', navigation);
   assert.equal(accountPage.status, 200);
   assert.equal(await accountPage.text(), shell);
@@ -94,4 +94,4 @@ if (mode === '--account') {
 }
 
 console.log('Web routes, API routing and static assets passed.');
-if (mode === '--account') console.log('Account creation, session restoration, deletion and PWA assets passed.');
+if (options.includes('--account')) console.log('Account creation, session restoration, deletion and PWA assets passed.');
