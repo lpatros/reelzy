@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 
-const [address, mode] = process.argv.slice(2);
-assert.ok(address, 'Pass the published Compose address or the HTTPS staging origin.');
-assert.ok(mode === undefined || mode === '--account', 'Unknown smoke test option.');
+const [address, ...options] = process.argv.slice(2);
+assert.ok(address, 'Pass the local Expo address or the HTTPS staging origin.');
+assert.ok(options.every((option) => ['--account', '--dev'].includes(option)), 'Unknown smoke test option.');
 const origin = new URL(address.includes('://') ? address : `http://${address}`);
 const fetchPath = (path, options) => fetch(new URL(path, origin), {
   ...options,
@@ -41,13 +41,13 @@ assert.equal(asset.status, 200);
 assert.match(asset.headers.get('content-type') ?? '', /javascript/);
 await asset.body?.cancel();
 
-for (const route of ['/_expo/missing.js', '/assets/missing.png']) {
+for (const route of options.includes('--dev') ? [] : ['/_expo/missing.js', '/assets/missing.png']) {
   const missingAsset = await fetchPath(route);
   assert.equal(missingAsset.status, 404, route);
   await missingAsset.body?.cancel();
 }
 
-if (mode === '--account') {
+if (options.includes('--account')) {
   const accountPage = await fetchPath('/account', navigation);
   assert.equal(accountPage.status, 200);
   assert.equal(await accountPage.text(), shell);
@@ -94,4 +94,4 @@ if (mode === '--account') {
 }
 
 console.log('Web routes, API routing and static assets passed.');
-if (mode === '--account') console.log('Account creation, session restoration, deletion and PWA assets passed.');
+if (options.includes('--account')) console.log('Account creation, session restoration, deletion and PWA assets passed.');
