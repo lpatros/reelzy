@@ -14,7 +14,6 @@ jobs:
     timeout-minutes: 20
     env:
       EXPO_NO_TELEMETRY: '1'
-      REELZY_WEB_PORT: '0'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -69,11 +68,23 @@ jobs:
           pnpm --filter reelzy-api openapi:export
       - name: Subir e verificar web, API e PostgreSQL
         run: |
-          docker compose up --build --wait --wait-timeout 120
-          node scripts/check-compose.mjs "$(docker compose port web 80)"
+          docker compose -f reelzy-api/compose.yaml up --wait --wait-timeout 120
+          DATABASE_URL=postgresql://reelzy:reelzy_local@127.0.0.1:5432/reelzy pnpm --filter reelzy-api test:db
+          pnpm --filter reelzy-app build:web
+          DATABASE_URL=postgresql://reelzy:reelzy_local@127.0.0.1:5432/reelzy \
+            AUTH_WEB_ORIGIN=http://127.0.0.1:8081 NODE_ENV=development \
+            REELZY_RUN_MIGRATIONS_ON_START=true pnpm --filter reelzy-api start > /tmp/reelzy-api.log 2>&1 &
+          pnpm --filter reelzy-app start --go --port 8081 > /tmp/reelzy-expo.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8081/api/v1/health; then break; fi
+            sleep 2
+          done
+          node scripts/check-compose.mjs http://127.0.0.1:8081 --account --dev
       - name: Exibir logs em caso de falha
         if: failure()
-        run: docker compose logs --no-color
+        run: |
+          docker compose -f reelzy-api/compose.yaml logs --no-color
+          cat /tmp/reelzy-api.log /tmp/reelzy-expo.log
       - name: Encerrar o ambiente de teste
         if: always()
-        run: docker compose down --volumes
+        run: docker compose -f reelzy-api/compose.yaml down --volumes
